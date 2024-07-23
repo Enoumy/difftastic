@@ -639,6 +639,7 @@ fn split_atom_words(
     opposite_content: &str,
     opposite_pos: &[SingleLineSpan],
     kind: AtomKind,
+    minimally_diff_comments_and_strings: bool,
 ) -> Vec<MatchedPos> {
     debug_assert!(kind == AtomKind::Comment || matches!(kind, AtomKind::String(_)));
 
@@ -690,23 +691,27 @@ fn split_atom_words(
             myers_diff::DiffResult::Both(word, opposite_word) => {
                 // This word is present on both sides.
                 // TODO: don't assume this atom is on a single line.
-                let word_pos =
-                    content_newlines.from_region_relative_to(pos[0], offset, offset + word.len())
-                        [0];
-                let opposite_word_pos = opposite_content_newlines.from_region_relative_to(
-                    opposite_pos[0],
-                    opposite_offset,
-                    opposite_offset + opposite_word.len(),
-                );
+                if !minimally_diff_comments_and_strings {
+                    let word_pos = content_newlines.from_region_relative_to(
+                        pos[0],
+                        offset,
+                        offset + word.len(),
+                    )[0];
+                    let opposite_word_pos = opposite_content_newlines.from_region_relative_to(
+                        opposite_pos[0],
+                        opposite_offset,
+                        opposite_offset + opposite_word.len(),
+                    );
 
-                mps.push(MatchedPos {
-                    kind: MatchKind::NovelLinePart {
-                        highlight: TokenKind::Atom(kind),
-                        self_pos: word_pos,
-                        opposite_pos: opposite_word_pos,
-                    },
-                    pos: word_pos,
-                });
+                    mps.push(MatchedPos {
+                        kind: MatchKind::NovelLinePart {
+                            highlight: TokenKind::Atom(kind),
+                            self_pos: word_pos,
+                            opposite_pos: opposite_word_pos,
+                        },
+                        pos: word_pos,
+                    });
+                }
                 offset += word.len();
                 opposite_offset += opposite_word.len();
             }
@@ -770,6 +775,7 @@ impl MatchedPos {
         highlight: TokenKind,
         pos: &[SingleLineSpan],
         is_close_delim: bool,
+        minimally_diff_comments_and_strings: bool,
     ) -> Vec<Self> {
         // Don't create a MatchedPos for empty positions at the start
         // or end. We still want empty positions in the middle of
@@ -802,7 +808,14 @@ impl MatchedPos {
                     AtomKind::Comment
                 };
 
-                split_atom_words(this_content, &pos, opposite_content, opposite_pos, kind)
+                split_atom_words(
+                    this_content,
+                    &pos,
+                    opposite_content,
+                    opposite_pos,
+                    kind,
+                    minimally_diff_comments_and_strings,
+                )
             }
             Unchanged(opposite) => {
                 let opposite_pos = match opposite {
@@ -873,11 +886,18 @@ impl MatchedPos {
 pub(crate) fn change_positions<'a>(
     nodes: &[&'a Syntax<'a>],
     change_map: &ChangeMap<'a>,
+    minimally_diff_comments_and_strings: bool,
 ) -> Vec<MatchedPos> {
     let mut positions = Vec::new();
     let mut seen_unchanged = false;
 
-    change_positions_(nodes, change_map, &mut positions, &mut seen_unchanged);
+    change_positions_(
+        nodes,
+        change_map,
+        &mut positions,
+        &mut seen_unchanged,
+        minimally_diff_comments_and_strings,
+    );
 
     // If there are no unchanged items, insert a dummy item at the
     // beginning of both files with a width of zero. This gives
@@ -914,6 +934,7 @@ fn change_positions_<'a>(
     change_map: &ChangeMap<'a>,
     positions: &mut Vec<MatchedPos>,
     seen_unchanged: &mut bool,
+    minimally_diff_comments_and_strings: bool,
 ) {
     for node in nodes {
         let change = change_map
@@ -936,15 +957,23 @@ fn change_positions_<'a>(
                     TokenKind::Delimiter,
                     open_position,
                     false,
+                    minimally_diff_comments_and_strings,
                 ));
 
-                change_positions_(children, change_map, positions, seen_unchanged);
+                change_positions_(
+                    children,
+                    change_map,
+                    positions,
+                    seen_unchanged,
+                    minimally_diff_comments_and_strings,
+                );
 
                 positions.extend(MatchedPos::new(
                     change,
                     TokenKind::Delimiter,
                     close_position,
                     true,
+                    minimally_diff_comments_and_strings,
                 ));
             }
             Atom { position, kind, .. } => {
@@ -953,6 +982,7 @@ fn change_positions_<'a>(
                     TokenKind::Atom(*kind),
                     position,
                     false,
+                    minimally_diff_comments_and_strings,
                 ));
             }
         }
@@ -1179,6 +1209,7 @@ mod tests {
             opposite_content,
             &opposite_pos,
             AtomKind::Comment,
+            false,
         );
         assert_eq!(
             res,
@@ -1294,6 +1325,47 @@ mod tests {
                     }
                 }
             ],
+        );
+    }
+
+    #[test]
+    fn test_split_atom_words_minimally_diff_comments() {
+        // This test tests that only a diff for "novel" is created
+        // when [minimally_diff_comments] is set to true.
+        let content = "abc def ghi novel";
+        let pos = vec![SingleLineSpan {
+            line: 0.into(),
+            start_col: 0,
+            end_col: 17,
+        }];
+
+        let opposite_content = "abc def ghi";
+        let opposite_pos = vec![SingleLineSpan {
+            line: 0.into(),
+            start_col: 0,
+            end_col: 11,
+        }];
+
+        let res = split_atom_words(
+            content,
+            &pos,
+            opposite_content,
+            &opposite_pos,
+            AtomKind::Comment,
+            true,
+        );
+        assert_eq!(
+            res,
+            vec![MatchedPos {
+                kind: MatchKind::NovelWord {
+                    highlight: TokenKind::Atom(AtomKind::Comment)
+                },
+                pos: SingleLineSpan {
+                    line: 0.into(),
+                    start_col: 12,
+                    end_col: 17
+                }
+            }],
         );
     }
 }

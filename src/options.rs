@@ -76,6 +76,7 @@ pub(crate) struct DiffOptions {
     pub(crate) check_only: bool,
     pub(crate) ignore_comments: bool,
     pub(crate) strip_cr: bool,
+    pub(crate) minimally_diff_comments_and_strings: bool,
 }
 
 impl Default for DiffOptions {
@@ -87,6 +88,7 @@ impl Default for DiffOptions {
             check_only: false,
             ignore_comments: false,
             strip_cr: false,
+            minimally_diff_comments_and_strings: false,
         }
     }
 }
@@ -303,6 +305,11 @@ When multiple overrides are specified, the first matching override wins."))
             Arg::new("sort-paths").long("sort-paths")
                 .env("DFT_SORT_PATHS")
                 .help("When diffing a directory, output the results sorted by path. This is slower.")
+        )
+        .arg(
+            Arg::new("minimally-diff-comments-and-strings").long("minimally-diff-comments-and-strings")
+                .env("DFT_MINIMAL_DIFF_COMMENTS_AND_STRINGS")
+                .help("When diffing strings and comments, only color the parts of the string/comments that changed.")
         )
         .arg_required_else_help(true)
 }
@@ -688,6 +695,9 @@ pub(crate) fn parse_args() -> Mode {
 
     let sort_paths = matches.is_present("sort-paths");
 
+    let minimally_diff_comments_and_strings =
+        matches.is_present("minimally-diff-comments-and-strings");
+
     let graph_limit = matches
         .value_of("graph-limit")
         .expect("Always present as we've given clap a default")
@@ -733,6 +743,7 @@ pub(crate) fn parse_args() -> Mode {
         check_only,
         ignore_comments,
         strip_cr,
+        minimally_diff_comments_and_strings,
     };
 
     let args: Vec<_> = matches.values_of_os("paths").unwrap_or_default().collect();

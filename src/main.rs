@@ -616,8 +616,16 @@ fn diff_file_content(
                                 fix_all_sliders(language, &lhs, &mut change_map);
                                 fix_all_sliders(language, &rhs, &mut change_map);
 
-                                let mut lhs_positions = syntax::change_positions(&lhs, &change_map);
-                                let mut rhs_positions = syntax::change_positions(&rhs, &change_map);
+                                let mut lhs_positions = syntax::change_positions(
+                                    &lhs,
+                                    &change_map,
+                                    diff_options.minimally_diff_comments_and_strings,
+                                );
+                                let mut rhs_positions = syntax::change_positions(
+                                    &rhs,
+                                    &change_map,
+                                    diff_options.minimally_diff_comments_and_strings,
+                                );
 
                                 if diff_options.ignore_comments {
                                     let lhs_comments =

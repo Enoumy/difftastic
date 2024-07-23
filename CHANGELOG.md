@@ -15,6 +15,10 @@ Fixed a performance issue when files had extremely long lines
 Fixed crash on some textual files where a single change contained more than
 1,000 words.
 
+`--minimally-diff-comments-and-strings` is a new flag that - when provided -
+when diffing strings and comments, will only color the parts of the string/comments
+that changed.
+
 ### Parsing
 
 Added support for device tree and F#.

@@ -126,6 +126,10 @@ OPTIONS
 
 : When diffing a directory, output the results sorted by path. This is slower.
 
+**\-\-minimally-diff-comments-and-strings**
+
+: When diffing strings and comments, only color the parts of the string/comments that changed.
+
 **\-\-strip-cr**
 
 : Remove any carriage return characters before diffing. This can be helpful when dealing
